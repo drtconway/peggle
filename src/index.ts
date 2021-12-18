@@ -1,12 +1,13 @@
 
 export interface One {kind: "one", one: string};
+export interface Str {kind: "str", str: string};
 export interface Star {kind: "star", star: Expression};
 export interface Plus {kind: "plus", plus: Expression};
 export interface Seq {kind: "seq", seq: Expression[]};
 export interface Sor {kind: "sor", sor: Expression[]};
 export interface Named {kind: "named", named: string};
 
-export type Expression = One | Star | Plus | Seq | Sor | Named;
+export type Expression = One | Str | Star | Plus | Seq | Sor | Named;
 
 export interface Rules {
     [index: string]: Expression
@@ -39,6 +40,10 @@ function makeExpression(arg : ExprnArg) : Expression {
 
 export function one(chrs : string) : Expression {
     return {kind: "one", one: chrs};
+}
+
+export function str(s : string) : Expression {
+    return {kind: "str", str: s};
 }
 
 export function star(arg: ExprnArg) : Expression {
@@ -121,6 +126,18 @@ export class Parser {
                 }
                 input.position += 1;
                 return true;
+            }
+            case 'str': {
+                let n = exprn.str.length;
+                if (input.position + n > input.length) {
+                    return false;
+                }
+                if (input.source.substring(input.position, input.position + n) == exprn.str) {
+                    input.position += n;
+                    return true;
+                } else {
+                    return false;
+                }
             }
             case 'seq': {
                 for (let kid of exprn.seq) {

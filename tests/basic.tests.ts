@@ -26,6 +26,17 @@ describe("test one", () => {
     });
 });
 
+describe("test str", () => {
+    let p = new P.Parser();
+    it("test accepting a single literal", () => {
+        let v = P.str('qux');
+        expect(p.accept(v, 'qu')).to.eql(false);
+        expect(p.accept(v, 'qux')).to.eql(true);
+        expect(p.accept(v, 'quxa')).to.eql(true);
+        expect(p.accept(v, 'quux')).to.eql(false);
+    });
+});
+
 describe("test seq", () => {
     let p = new P.Parser();
     it("test empty sequence", () => {
