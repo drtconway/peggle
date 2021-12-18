@@ -12,29 +12,62 @@ export interface Rules {
     [index: string]: Expression
 };
 
-export type Action = ((arg : string) => void);
+export type Action = { arity: 0, closure: () => void } |  {arity: 1, closure: (arg : string) => void };
+
+export function action(f : () => void) : Action;
+export function action(f : (arg : string) => void) : Action;
+export function action(f: Function) : Action {
+    if (f.length == 0) {
+            return {arity: 0, closure: (f as (() => void))};
+    } else {
+        return {arity: 1, closure: (f as ((arg : string) => void))};
+    }
+}
 
 export interface Actions {
     [index: string]: Action
+}
+
+export type ExprnArg = Expression | string;
+function makeExpression(arg : ExprnArg) : Expression {
+    if (typeof arg == 'string') {
+        return named(arg);
+    } else {
+        return arg;
+    }
 }
 
 export function one(chrs : string) : Expression {
     return {kind: "one", one: chrs};
 }
 
-export function star(exprn: Expression) : Expression {
-    return {kind: "star", star: exprn};
+export function star(arg: ExprnArg) : Expression {
+    return {kind: "star", star: makeExpression(arg)};
 }
 
-export function plus(exprn: Expression) : Expression {
-    return {kind: "plus", plus: exprn};
+export function plus(arg: ExprnArg) : Expression {
+    return {kind: "plus", plus: makeExpression(arg)};
 }
 
-export function seq(exprns: Expression[]) : Expression {
+export function seq(args: ExprnArg[]) : Expression {
+    let exprns : Expression[] = [];
+    for (let arg of args) {
+        exprns.push(makeExpression(arg));
+    }
+    if (exprns.length == 1) {
+        return exprns[0];
+    }
     return {kind: "seq", seq: exprns};
 }
 
-export function sor(exprns: Expression[]) : Expression {
+export function sor(args: ExprnArg[]) : Expression {
+    let exprns : Expression[] = [];
+    for (let arg of args) {
+        exprns.push(makeExpression(arg));
+    }
+    if (exprns.length == 1) {
+        return exprns[0];
+    }
     return {kind: "sor", sor: exprns};
 }
 
@@ -71,9 +104,9 @@ export class Parser {
         this.actions = actions;
     }
 
-    accept(exprn : Expression, input : string) : boolean {
+    accept(arg : ExprnArg, input : string) : boolean {
         let inp = new Input(input);
-        return this.doParse(exprn, inp);
+        return this.doParse(makeExpression(arg), inp);
     }
 
     doParse(exprn : Expression, input : Input) : boolean {
@@ -129,7 +162,16 @@ export class Parser {
                 let res = this.doParse(this.rules[exprn.named], input);
                 if (res && (exprn.named in this.actions)) {
                     let a : Action = this.actions[exprn.named];
-                    a(input.source.substring(p, input.position));
+                    switch (a.arity) {
+                        case 0: {
+                            a.closure();
+                            break;
+                        }
+                        case 1: {
+                            a.closure(input.source.substring(p, input.position));
+                            break;
+                        }
+                    }
                 }
                 return res;
             }

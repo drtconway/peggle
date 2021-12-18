@@ -115,15 +115,26 @@ describe("test named", () => {
 });
 
 describe("test action", () => {
+    it("closure instanceof function", () => {
+        expect(((s : string) => {}) instanceof Function).to.eql(true);
+    });
+    it("construct action 0", () => {
+        let a = P.action(() => {});
+        expect(a.arity).to.eql(0);
+    });
+    it("construct action 1", () => {
+        let a = P.action((s : string) => {});
+        expect(a.arity).to.eql(1);
+    });
     it("try an action 1", () => {
         let x = '';
-        let p = new P.Parser({foo: P.one('a')}, {foo: (s) => { x = s; }});
+        let p = new P.Parser({foo: P.one('a')}, {foo: P.action((s:string) => { x = s; })});
         expect(p.accept(P.named("foo"), 'b')).to.eql(false);
         expect(x).to.eql('');   
     });
     it("try an action 2", () => {
         let x = '';
-        let p = new P.Parser({foo: P.one('a')}, {foo: (s) => { x = s; }});
+        let p = new P.Parser({foo: P.one('a')}, {foo: P.action((s:string) => { x = s; })});
         expect(p.accept(P.named("foo"), 'a')).to.eql(true);
         expect(x).to.eql('a');   
     });
@@ -136,29 +147,81 @@ describe("test simple grammar", () => {
 
     const rules = {
         num: P.plus(P.one("0123456789")),
-        plusNum: P.seq([P.one("+"), P.named("num")]),
-        plus: P.seq([P.named("num"), P.star(P.named("plusNum"))])
+        plusNum: P.seq([P.one("+"), "num"]),
+        plus: P.seq(["num", P.star("plusNum")])
     };
-    const actions = {
-        num: (s : string) => { stk.push(Number(s)); },
-        plusNum: () => {
+    const actions : P.Actions = {
+        num: P.action((s : string) => { stk.push(Number(s)); }),
+        plusNum: P.action(() => {
             let x2 = stk.pop() || 0;
             let x1 = stk.pop() || 0;
             stk.push(x1 + x2);
-        }
+        })
     };
     let p = new P.Parser(rules, actions);
     it("just a number", () => {
         stk = [];
-        expect(p.accept(P.named("plus"), "123")).to.eql(true);
+        expect(p.accept("plus", "123")).to.eql(true);
         expect(stk.length).to.eql(1);
         expect(stk[0]).to.eql(123);
     });
     it("just two numbers", () => {
         stk = [];
-        expect(p.accept(P.named("plus"), "123+456")).to.eql(true);
+        expect(p.accept("plus", "123+456")).to.eql(true);
         expect(stk.length).to.eql(1);
         expect(stk[0]).to.eql(579);
     });
+});
 
+describe("recursive grammar", () => {
+    let stk : number[] = [];
+
+    const rules = {
+        num: P.plus(P.one("0123456789")),
+        factor: P.sor(["num", P.seq([P.one('('), "exprn", P.one(')')])]),
+        timesFactor: P.seq([P.one('*'), "factor"]),
+        term: P.seq(["factor", P.star("timesFactor")]),
+        plusTerm: P.seq([P.one("+"), "term"]),
+        exprn: P.seq(["term", P.star("plusTerm")])
+    };
+    const actions : P.Actions = {
+        num: P.action((s : string) => { stk.push(Number(s)); }),
+        timesFactor: P.action(() => {
+            let x2 = stk.pop() || 0;
+            let x1 = stk.pop() || 0;
+            console.log(`${x1} * ${x2}`);
+            stk.push(x1 * x2);
+        }),
+        plusTerm: P.action(() => {
+            let x2 = stk.pop() || 0;
+            let x1 = stk.pop() || 0;
+            console.log(`${x1} + ${x2}`);
+            stk.push(x1 + x2);
+        })
+    };
+    let p = new P.Parser(rules, actions);
+    it("just a number", () => {
+        stk = [];
+        expect(p.accept("exprn", "123")).to.eql(true);
+        expect(stk.length).to.eql(1);
+        expect(stk[0]).to.eql(123);
+    });
+    it("just two numbers + ", () => {
+        stk = [];
+        expect(p.accept("exprn", "123+456")).to.eql(true);
+        expect(stk.length).to.eql(1);
+        expect(stk[0]).to.eql(579);
+    });
+    it("just two numbers *", () => {
+        stk = [];
+        expect(p.accept("exprn", "123*456")).to.eql(true);
+        expect(stk.length).to.eql(1);
+        expect(stk[0]).to.eql(56088);
+    });
+    it("a more complex expression", () => {
+        stk = [];
+        expect(p.accept("exprn", "(1+2)*(3+4)+5*6")).to.eql(true);
+        expect(stk.length).to.eql(1);
+        expect(stk[0]).to.eql(51);
+    });
 });
