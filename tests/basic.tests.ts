@@ -111,6 +111,17 @@ describe("test plus", () => {
     });
 });
 
+describe("test opt", () => {
+    let p = new P.Parser();
+    it("test opt", () => {
+        let v = P.opt(P.one('a'));
+        expect(p.accept(v, '')).to.eql(true);
+        expect(p.accept(v, 'abc')).to.eql(true);
+        expect(p.accept(v, 'bca')).to.eql(true);
+        expect(p.accept(v, 'aaac')).to.eql(true);
+    });  
+});
+
 describe("test named", () => {
     let p = new P.Parser({foo: P.one('a')});
     it("test named", () => {

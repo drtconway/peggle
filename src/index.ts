@@ -46,6 +46,10 @@ export function str(s : string) : Expression {
     return {kind: "str", str: s};
 }
 
+export function opt(arg : ExprnArg) : Expression {
+    return sor([makeExpression(arg), seq([])]);
+}
+
 export function star(arg: ExprnArg) : Expression {
     return {kind: "star", star: makeExpression(arg)};
 }
