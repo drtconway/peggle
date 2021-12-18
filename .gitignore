@@ -102,4 +102,4 @@ dist
 
 # TernJS port file
 .tern-port
-tests/basic.tests.ts
+package-lock.json
