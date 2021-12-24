@@ -1,33 +1,54 @@
+export class Input {
+    source: string;
+    position: number;
+    length: number;
+    span: [number, number];
 
-export interface One {kind: "one", one: string};
-export interface Str {kind: "str", str: string};
-export interface Star {kind: "star", star: Expression};
-export interface Plus {kind: "plus", plus: Expression};
-export interface Seq {kind: "seq", seq: Expression[]};
-export interface Sor {kind: "sor", sor: Expression[]};
-export interface Named {kind: "named", named: string};
+    constructor(source : string) {
+        this.source = source;
+        this.position = 0;
+        this.length = this.source.length;
+        this.span = [0, 0];
+    }
+
+    save() : number {
+        return this.position;
+    }
+
+    restore(position : number) {
+        this.position = position;
+    }
+
+    string() : string {
+        return this.source.slice(this.span[0], this.span[1]);
+    }
+}
+
+export interface Action<State> {
+    (input: Input, state: State) : void
+};
+
+export interface RuleActions<State> {
+    [index: string]: Action<State>
+}
+
+export interface ExprnActions<State> {
+    [index: symbol]: Action<State>
+}
+
+export interface One {kind: "one", one: string, id: symbol};
+export interface Str {kind: "str", str: string, id: symbol};
+export interface Star {kind: "star", star: Expression, id: symbol};
+export interface Plus {kind: "plus", plus: Expression, id: symbol};
+export interface Seq {kind: "seq", seq: Expression[], id: symbol};
+export interface Sor {kind: "sor", sor: Expression[], id: symbol};
+export interface Named {kind: "named", named: string, id: symbol};
 
 export type Expression = One | Str | Star | Plus | Seq | Sor | Named;
 
 export interface Rules {
     [index: string]: Expression
 };
-
-export type Action = { arity: 0, closure: () => void } |  {arity: 1, closure: (arg : string) => void };
-
-export function action(f : () => void) : Action;
-export function action(f : (arg : string) => void) : Action;
-export function action(f: Function) : Action {
-    if (f.length == 0) {
-            return {arity: 0, closure: (f as (() => void))};
-    } else {
-        return {arity: 1, closure: (f as ((arg : string) => void))};
-    }
-}
-
-export interface Actions {
-    [index: string]: Action
-}
 
 export type ExprnArg = Expression | string;
 function makeExpression(arg : ExprnArg) : Expression {
@@ -38,12 +59,18 @@ function makeExpression(arg : ExprnArg) : Expression {
     }
 }
 
+let nextId = 1;
+function makeUniquesymbol() : symbol {
+    let n = nextId++;
+    return Symbol.for(`${n}`);
+}
+
 export function one(chrs : string) : Expression {
-    return {kind: "one", one: chrs};
+    return {kind: "one", one: chrs, id: makeUniquesymbol()};
 }
 
 export function str(s : string) : Expression {
-    return {kind: "str", str: s};
+    return {kind: "str", str: s, id: makeUniquesymbol()};
 }
 
 export function opt(arg : ExprnArg) : Expression {
@@ -51,11 +78,11 @@ export function opt(arg : ExprnArg) : Expression {
 }
 
 export function star(arg: ExprnArg) : Expression {
-    return {kind: "star", star: makeExpression(arg)};
+    return {kind: "star", star: makeExpression(arg), id: makeUniquesymbol()};
 }
 
 export function plus(arg: ExprnArg) : Expression {
-    return {kind: "plus", plus: makeExpression(arg)};
+    return {kind: "plus", plus: makeExpression(arg), id: makeUniquesymbol()};
 }
 
 export function seq(args: ExprnArg[]) : Expression {
@@ -66,7 +93,7 @@ export function seq(args: ExprnArg[]) : Expression {
     if (exprns.length == 1) {
         return exprns[0];
     }
-    return {kind: "seq", seq: exprns};
+    return {kind: "seq", seq: exprns, id: makeUniquesymbol()};
 }
 
 export function sor(args: ExprnArg[]) : Expression {
@@ -77,48 +104,112 @@ export function sor(args: ExprnArg[]) : Expression {
     if (exprns.length == 1) {
         return exprns[0];
     }
-    return {kind: "sor", sor: exprns};
+    return {kind: "sor", sor: exprns, id: makeUniquesymbol()};
 }
 
 export function named(name: string) : Expression {
-    return {kind: "named", named: name};
+    return {kind: "named", named: name, id: makeUniquesymbol()};
 }
 
-export class Input {
-    source: string;
-    position: number;
-    length: number;
-
-    constructor(source : string) {
-        this.source = source;
-        this.position = 0;
-        this.length = this.source.length;
-    }
-
-    save() : number {
-        return this.position;
-    }
-
-    restore(position : number) {
-        this.position = position;
-    }
-}
-
-export class Parser {
+export class Grammar<State> {
     rules: Rules;
-    actions: Actions;
+    exprnActions: ExprnActions<State>;
+    namedActions: RuleActions<State>;
 
-    constructor(rules : Rules = {}, actions: Actions = {}) {
-        this.rules = rules;
-        this.actions = actions;
+    constructor() {
+        this.rules = {};
+        this.exprnActions = {};
+        this.namedActions = {};
     }
 
-    accept(arg : ExprnArg, input : string) : boolean {
+    one(chrs : string, action?: Action<State>) : Expression {
+        let exprn = one(chrs);
+        if (action) {
+            this.exprnActions[exprn.id] = action;
+        }
+        return exprn;
+    }
+    
+    str(s : string, action?: Action<State>) : Expression {
+        let exprn = str(s);
+        if (action) {
+            this.exprnActions[exprn.id] = action;
+        }
+        return exprn;
+    }
+    
+    opt(arg : ExprnArg, action?: Action<State>) : Expression {
+        let exprn = opt(arg);
+        if (action) {
+            this.exprnActions[exprn.id] = action;
+        }
+        return exprn;
+    }
+    
+    star(arg: ExprnArg, action?: Action<State>) : Expression {
+        let exprn = star(arg);
+        if (action) {
+            this.exprnActions[exprn.id] = action;
+        }
+        return exprn;
+    }
+    
+    plus(arg: ExprnArg, action?: Action<State>) : Expression {
+        let exprn = plus(arg);
+        if (action) {
+            this.exprnActions[exprn.id] = action;
+        }
+        return exprn;
+    }
+    
+    seq(args: ExprnArg[], action?: Action<State>) : Expression {
+        let exprn = seq(args);
+        if (action) {
+            this.exprnActions[exprn.id] = action;
+        }
+        return exprn;
+    }
+    
+    sor(args: ExprnArg[], action?: Action<State>) : Expression {
+        let exprn = sor(args);
+        if (action) {
+            this.exprnActions[exprn.id] = action;
+        }
+        return exprn;
+    }
+    
+    named(name: string, action?: Action<State>) : Expression {
+        let exprn = named(name);
+        if (action) {
+            this.exprnActions[exprn.id] = action;
+        }
+        return exprn;
+    }
+}
+
+export class Parser<State> {
+    grammar: Grammar<State>;
+    constructor(grammar: Grammar<State>) {
+        this.grammar = grammar;
+    }
+
+    accept(arg : ExprnArg, input : string, state: State) : boolean {
         let inp = new Input(input);
-        return this.doParse(makeExpression(arg), inp);
+        return this.parse(makeExpression(arg), inp, state);
     }
 
-    doParse(exprn : Expression, input : Input) : boolean {
+    parse(exprn : Expression, input : Input, state: State) : boolean {
+        let begin = input.position;
+        let res = this.parseExprn(exprn, input, state);
+        if (res && exprn.id in this.grammar.exprnActions) {
+            input.span[0] = begin;
+            input.span[1] = input.position;
+            this.grammar.exprnActions[exprn.id](input, state);
+        }
+        return res;
+    }
+
+    parseExprn(exprn : Expression, input : Input, state: State) : boolean {
         switch (exprn.kind) {
             case 'one': {
                 if (input.position == input.length) {
@@ -145,7 +236,7 @@ export class Parser {
             }
             case 'seq': {
                 for (let kid of exprn.seq) {
-                    if (!this.doParse(kid, input)) {
+                    if (!this.parse(kid, input, state)) {
                         return false;
                     }
                 }
@@ -154,7 +245,7 @@ export class Parser {
             case 'sor': {
                 let s = input.save();
                 for (let kid of exprn.sor) {
-                    if (this.doParse(kid, input)) {
+                    if (this.parse(kid, input, state)) {
                         return true;
                     }
                     input.restore(s);
@@ -163,36 +254,28 @@ export class Parser {
             }
             case 'plus': {
                 let n = 0;
-                while (this.doParse(exprn.plus, input)) {
+                while (this.parse(exprn.plus, input, state)) {
                     n += 1;
                 }
                 return n > 0;
             }
             case 'star': {
                 let n = 0;
-                while (this.doParse(exprn.star, input)) {
+                while (this.parse(exprn.star, input, state)) {
                     n += 1;
                 }
                 return true;
             }
             case 'named': {
-                if (!(exprn.named in this.rules)) {
+                if (!(exprn.named in this.grammar.rules)) {
                     throw new Error(`no such rule '${exprn.named}'`);
                 }
-                let p = input.position;
-                let res = this.doParse(this.rules[exprn.named], input);
-                if (res && (exprn.named in this.actions)) {
-                    let a : Action = this.actions[exprn.named];
-                    switch (a.arity) {
-                        case 0: {
-                            a.closure();
-                            break;
-                        }
-                        case 1: {
-                            a.closure(input.source.substring(p, input.position));
-                            break;
-                        }
-                    }
+                let begin = input.position;
+                let res = this.parse(this.grammar.rules[exprn.named], input, state);
+                if (res && exprn.named in this.grammar.namedActions) {
+                    input.span[0] = begin;
+                    input.span[1] = input.position;
+                    this.grammar.namedActions[exprn.named](input, state);
                 }
                 return res;
             }
