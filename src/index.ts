@@ -38,13 +38,14 @@ export interface ExprnActions<State> {
 
 export interface One {kind: "one", one: string, id: symbol};
 export interface Str {kind: "str", str: string, id: symbol};
+export interface Range {kind: "range", first: number, last: number, id: symbol};
 export interface Star {kind: "star", star: Expression, id: symbol};
 export interface Plus {kind: "plus", plus: Expression, id: symbol};
 export interface Seq {kind: "seq", seq: Expression[], id: symbol};
 export interface Sor {kind: "sor", sor: Expression[], id: symbol};
 export interface Named {kind: "named", named: string, id: symbol};
 
-export type Expression = One | Str | Star | Plus | Seq | Sor | Named;
+export type Expression = One | Str | Range | Star | Plus | Seq | Sor | Named;
 
 export interface Rules {
     [index: string]: Expression
@@ -71,6 +72,27 @@ export function one(chrs : string) : Expression {
 
 export function str(s : string) : Expression {
     return {kind: "str", str: s, id: makeUniquesymbol()};
+}
+
+export function range(first: string, last: string) : Expression;
+export function range(first: number, last: number) : Expression;
+export function range(first: (string|number), last: (string|number)) : Expression {
+    if (typeof first == "string") {
+        if (first.length != 1) {
+            throw new Error(`range: first element of range must be a single character.`);
+        }
+        first = first.charCodeAt(0);
+    }
+    if (typeof last == "string") {
+        if (last.length != 1) {
+            throw new Error(`range: last element of range must be a single character.`);
+        }
+        last = last.charCodeAt(0);
+    }
+    if (first > last) {
+        throw new Error(`range: last must be less than or equal to first.`);
+    }
+    return {kind: "range", first, last, id: makeUniquesymbol()};
 }
 
 export function opt(arg : ExprnArg) : Expression {
@@ -137,7 +159,14 @@ export class Grammar<State> {
         }
         return exprn;
     }
-    
+    range(first: string, last: string, action?: Action<State>): Expression {
+        let exprn = range(first, last);
+        if (action) {
+            this.exprnActions[exprn.id] = action;
+        }
+        return exprn;
+    }
+
     opt(arg : ExprnArg, action?: Action<State>) : Expression {
         let exprn = opt(arg);
         if (action) {
@@ -233,6 +262,17 @@ export class Parser<State> {
                 } else {
                     return false;
                 }
+            }
+            case 'range': {
+                if (input.position == input.length) {
+                    return false;
+                }
+                let chrCode = input.source.charCodeAt(input.position);
+                if (exprn.first <= chrCode && chrCode <= exprn.last) {
+                    input.position += 1;
+                    return true;
+                }
+                return false;
             }
             case 'seq': {
                 for (let kid of exprn.seq) {

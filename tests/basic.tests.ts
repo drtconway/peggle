@@ -35,6 +35,35 @@ describe("test str", () => {
     });
 });
 
+describe("test range", () => {
+    let g = new P.Grammar<null>();
+    let p = new P.Parser(g);
+    it("singleton range", () => {
+        let v = P.range('a', 'a');
+        expect(p.accept(v, 'a', null)).to.eql(true);
+        expect(p.accept(v, 'b', null)).to.eql(false);
+    });
+    it("ordinary range (string)", () => {
+        let v = P.range('a', 'z');
+        expect(p.accept(v, 'a', null)).to.eql(true);
+        expect(p.accept(v, 'b', null)).to.eql(true);
+        expect(p.accept(v, '', null)).to.eql(false);
+        expect(p.accept(v, 'A', null)).to.eql(false);
+    });
+    it("ordinary range (string)", () => {
+        let v = P.range(97, 122);
+        expect(p.accept(v, 'a', null)).to.eql(true);
+        expect(p.accept(v, 'b', null)).to.eql(true);
+        expect(p.accept(v, '', null)).to.eql(false);
+        expect(p.accept(v, 'A', null)).to.eql(false);
+    });
+    it("invalid ranges", () => {
+        expect(() => {P.range('', 'z')}).to.throw('range: first element of range must be a single character.');
+        expect(() => {P.range('a', 'zz')}).to.throw('range: last element of range must be a single character.');
+        expect(() => {P.range('z', 'a')}).to.throw('range: last must be less than or equal to first.');
+    });
+});
+
 describe("test seq", () => {
     let g = new P.Grammar<null>();
     let p = new P.Parser(g);
@@ -261,6 +290,25 @@ describe("test expression actions", () => {
         it("without this str", () => {
             let s = new Set<string>();
             expect(p.accept(g.str('a'), 'a', s)).to.eql(true);
+            expect(s.size).to.eql(0);
+        });
+    });
+
+    describe("range", () => {
+        let g = new P.Grammar<Set<string>>();
+        let e = g.range('a', 'z', (input: P.Input, state: Set<string>) => {
+            state.add(input.string());
+        });
+        let p = new P.Parser(g);
+        it("with this range", () => {
+            let s = new Set<string>();
+            expect(p.accept(e, 'a', s)).to.eql(true);
+            expect(s.size).to.eql(1);
+            expect(s.has('a')).to.eql(true);    
+        });
+        it("without this range", () => {
+            let s = new Set<string>();
+            expect(p.accept(g.range('a', 'z'), 'a', s)).to.eql(true);
             expect(s.size).to.eql(0);
         });
     });
