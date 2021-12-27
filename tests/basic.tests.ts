@@ -2,8 +2,21 @@ import * as P from "../src/index";
 
 import * as mocha from "mocha";
 import * as chai from "chai";
-import { G } from "../examples/sql";
 const expect = chai.expect;
+
+describe("test fwd", () => {
+    let g = new P.Grammar<null>();
+    let p = new P.Parser(g);
+    it ("test attempting to parse a forward declaration", () => {
+        let v = P.fwd();
+        expect(() => { p.accept(v, "", null); }).to.throw("unresolved forward declaration");
+    });
+    it("test assigning a forward delcalration", () => {
+        let v = P.fwd();
+        g.update(v, P.one('a'));
+        expect(p.accept(v, "a", null)).to.eql(true);
+    })
+});
 
 describe("test one", () => {
   let g = new P.Grammar<null>();
