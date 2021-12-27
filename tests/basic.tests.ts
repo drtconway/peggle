@@ -233,12 +233,12 @@ describe("test at and not_at with actions", () => {
       return P.seq([P.str(kw), P.not_at("identifier")]);
     })
   );
-  g.namedActions.identifier = (input: P.Input, state: string[]) => {
+  g.with(g.rules.identifier, (input: P.Input, state: string[]) => {
     state.push(input.string());
-  };
-  g.namedActions.keyword = (input: P.Input, state: string[]) => {
+  });
+  g.with(g.rules.keyword, (input: P.Input, state: string[]) => {
     state.push(input.string());
-  };
+  });
   let p = new P.Parser(g);
   for (let kw of keywords) {
       it(`test '${kw}`, () => {
@@ -340,9 +340,9 @@ describe("recursive grammar", () => {
 describe("test expression actions", () => {
   describe("one", () => {
     let g = new P.Grammar<Set<string>>();
-    let e = g.one("a", (input: P.Input, state: Set<string>) => {
-      state.add("a");
-    });
+    let e = g.with(P.one('a'), (input: P.Input, state: Set<string>) => {
+        state.add("a");
+      });
     let p = new P.Parser(g);
     it("with this one", () => {
       let s = new Set<string>();
@@ -352,14 +352,14 @@ describe("test expression actions", () => {
     });
     it("without this one", () => {
       let s = new Set<string>();
-      expect(p.accept(g.one("a"), "a", s)).to.eql(true);
+      expect(p.accept(P.one("a"), "a", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });
 
   describe("str", () => {
     let g = new P.Grammar<Set<string>>();
-    let e = g.str("a", (input: P.Input, state: Set<string>) => {
+    let e = g.with(P.str("a"), (input: P.Input, state: Set<string>) => {
       state.add("a");
     });
     let p = new P.Parser(g);
@@ -371,14 +371,14 @@ describe("test expression actions", () => {
     });
     it("without this str", () => {
       let s = new Set<string>();
-      expect(p.accept(g.str("a"), "a", s)).to.eql(true);
+      expect(p.accept(P.str("a"), "a", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });
 
   describe("range", () => {
     let g = new P.Grammar<Set<string>>();
-    let e = g.range("a", "z", (input: P.Input, state: Set<string>) => {
+    let e = g.with(P.range("a", "z"), (input: P.Input, state: Set<string>) => {
       state.add(input.string());
     });
     let p = new P.Parser(g);
@@ -390,14 +390,14 @@ describe("test expression actions", () => {
     });
     it("without this range", () => {
       let s = new Set<string>();
-      expect(p.accept(g.range("a", "z"), "a", s)).to.eql(true);
+      expect(p.accept(P.range("a", "z"), "a", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });
 
   describe("opt", () => {
     let g = new P.Grammar<Set<string>>();
-    let e = g.opt(P.one("a"), (input: P.Input, state: Set<string>) => {
+    let e = g.with(P.opt(P.one("a")), (input: P.Input, state: Set<string>) => {
       state.add(input.string());
     });
     let p = new P.Parser(g);
@@ -415,14 +415,14 @@ describe("test expression actions", () => {
     });
     it("without this opt (1)", () => {
       let s = new Set<string>();
-      expect(p.accept(g.opt(g.one("a")), "a", s)).to.eql(true);
+      expect(p.accept(P.opt(P.one("a")), "a", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });
 
   describe("star", () => {
     let g = new P.Grammar<Set<string>>();
-    let e = g.star(P.one("a"), (input: P.Input, state: Set<string>) => {
+    let e = g.with(P.star(P.one("a")), (input: P.Input, state: Set<string>) => {
       state.add(input.string());
     });
     let p = new P.Parser(g);
@@ -440,14 +440,14 @@ describe("test expression actions", () => {
     });
     it("without this star (1)", () => {
       let s = new Set<string>();
-      expect(p.accept(g.star(g.one("a")), "aaa", s)).to.eql(true);
+      expect(p.accept(P.star(P.one("a")), "aaa", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });
 
   describe("plus", () => {
     let g = new P.Grammar<Set<string>>();
-    let e = g.plus(P.one("a"), (input: P.Input, state: Set<string>) => {
+    let e = g.with(P.plus(P.one("a")), (input: P.Input, state: Set<string>) => {
       state.add(input.string());
     });
     let p = new P.Parser(g);
@@ -464,15 +464,15 @@ describe("test expression actions", () => {
     });
     it("without this plus (1)", () => {
       let s = new Set<string>();
-      expect(p.accept(g.plus(g.one("a")), "aaa", s)).to.eql(true);
+      expect(p.accept(P.plus(P.one("a")), "aaa", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });
 
   describe("seq", () => {
     let g = new P.Grammar<Set<string>>();
-    let e = g.seq(
-      [P.one("a"), P.one("b")],
+    let e = g.with(P.seq(
+      [P.one("a"), P.one("b")]),
       (input: P.Input, state: Set<string>) => {
         state.add(input.string());
       }
@@ -486,15 +486,15 @@ describe("test expression actions", () => {
     });
     it("without this seq (1)", () => {
       let s = new Set<string>();
-      expect(p.accept(g.seq([g.one("a"), g.one("b")]), "ab", s)).to.eql(true);
+      expect(p.accept(P.seq([P.one("a"), P.one("b")]), "ab", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });
 
   describe("sor", () => {
     let g = new P.Grammar<Set<string>>();
-    let e = g.sor(
-      [P.one("a"), P.one("b")],
+    let e = g.with(P.sor(
+      [P.one("a"), P.one("b")]),
       (input: P.Input, state: Set<string>) => {
         state.add(input.string());
       }
@@ -519,7 +519,7 @@ describe("test expression actions", () => {
     });
     it("without this sor (1)", () => {
       let s = new Set<string>();
-      expect(p.accept(g.sor([g.one("a"), g.one("b")]), "a", s)).to.eql(true);
+      expect(p.accept(P.sor([P.one("a"), P.one("b")]), "a", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });
@@ -527,7 +527,7 @@ describe("test expression actions", () => {
   describe("named", () => {
     let g = new P.Grammar<Set<string>>();
     g.rules.qux = P.one("a");
-    let e = g.named("qux", (input: P.Input, state: Set<string>) => {
+    let e = g.with(P.named("qux"), (input: P.Input, state: Set<string>) => {
       state.add(input.string());
     });
     let p = new P.Parser(g);
@@ -544,7 +544,7 @@ describe("test expression actions", () => {
     });
     it("without this named (1)", () => {
       let s = new Set<string>();
-      expect(p.accept(g.named("qux"), "a", s)).to.eql(true);
+      expect(p.accept(P.named("qux"), "a", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });

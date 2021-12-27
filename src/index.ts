@@ -36,6 +36,7 @@ export interface ExprnActions<State> {
     [index: symbol]: Action<State>
 }
 
+export interface Fwd {kind: "fwd", id: symbol};
 export interface One {kind: "one", one: string, id: symbol};
 export interface NotOne {kind: "not_one", not_one: string, id: symbol};
 export interface Str {kind: "str", str: string, id: symbol};
@@ -48,7 +49,7 @@ export interface Named {kind: "named", named: string, id: symbol};
 export interface At {kind: "at", at: Expression, id: symbol};
 export interface NotAt {kind: "not_at", not_at: Expression, id: symbol};
 
-export type Expression = One | NotOne | Str | Range | Star | Plus | Seq | Sor | Named | At | NotAt;
+export type Expression = Fwd | One | NotOne | Str | Range | Star | Plus | Seq | Sor | Named | At | NotAt;
 
 export interface Rules {
     [index: string]: Expression
@@ -67,6 +68,10 @@ let nextId = 1;
 function makeUniquesymbol() : symbol {
     let n = nextId++;
     return Symbol.for(`${n}`);
+}
+
+export function fwd() : Expression {
+    return {kind: "fwd", id: makeUniquesymbol()};
 }
 
 export function one(chrs : string) : Expression {
@@ -159,78 +164,14 @@ export class Grammar<State> {
         this.namedActions = {};
     }
 
-    with(exprn: Expression, action: Action<State>) {
+    update(lval: Expression, rval: Expression) {
+        let id = lval.id;
+        Object.assign(lval, rval);
+        lval.id = id;
+    }
+
+    with(exprn: Expression, action: Action<State>) : Expression {
         this.exprnActions[exprn.id] = action;
-    }
-
-    one(chrs : string, action?: Action<State>) : Expression {
-        let exprn = one(chrs);
-        if (action) {
-            this.exprnActions[exprn.id] = action;
-        }
-        return exprn;
-    }
-    
-    str(s : string, action?: Action<State>) : Expression {
-        let exprn = str(s);
-        if (action) {
-            this.exprnActions[exprn.id] = action;
-        }
-        return exprn;
-    }
-    range(first: string, last: string, action?: Action<State>): Expression {
-        let exprn = range(first, last);
-        if (action) {
-            this.exprnActions[exprn.id] = action;
-        }
-        return exprn;
-    }
-
-    opt(arg : ExprnArg, action?: Action<State>) : Expression {
-        let exprn = opt(arg);
-        if (action) {
-            this.exprnActions[exprn.id] = action;
-        }
-        return exprn;
-    }
-    
-    star(arg: ExprnArg, action?: Action<State>) : Expression {
-        let exprn = star(arg);
-        if (action) {
-            this.exprnActions[exprn.id] = action;
-        }
-        return exprn;
-    }
-    
-    plus(arg: ExprnArg, action?: Action<State>) : Expression {
-        let exprn = plus(arg);
-        if (action) {
-            this.exprnActions[exprn.id] = action;
-        }
-        return exprn;
-    }
-    
-    seq(args: ExprnArg[], action?: Action<State>) : Expression {
-        let exprn = seq(args);
-        if (action) {
-            this.exprnActions[exprn.id] = action;
-        }
-        return exprn;
-    }
-    
-    sor(args: ExprnArg[], action?: Action<State>) : Expression {
-        let exprn = sor(args);
-        if (action) {
-            this.exprnActions[exprn.id] = action;
-        }
-        return exprn;
-    }
-    
-    named(name: string, action?: Action<State>) : Expression {
-        let exprn = named(name);
-        if (action) {
-            this.exprnActions[exprn.id] = action;
-        }
         return exprn;
     }
 }
@@ -263,6 +204,9 @@ export class Parser<State> {
 
     parseExprn(exprn : Expression, input : Input, state: State) : boolean {
         switch (exprn.kind) {
+            case 'fwd': {
+                throw new Error(`unresolved forward declaration.`);
+            }
             case 'one': {
                 if (input.position == input.length) {
                     return false;
