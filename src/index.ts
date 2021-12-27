@@ -37,6 +37,7 @@ export interface ExprnActions<State> {
 }
 
 export interface One {kind: "one", one: string, id: symbol};
+export interface NotOne {kind: "not_one", not_one: string, id: symbol};
 export interface Str {kind: "str", str: string, id: symbol};
 export interface Range {kind: "range", first: number, last: number, id: symbol};
 export interface Star {kind: "star", star: Expression, id: symbol};
@@ -44,8 +45,10 @@ export interface Plus {kind: "plus", plus: Expression, id: symbol};
 export interface Seq {kind: "seq", seq: Expression[], id: symbol};
 export interface Sor {kind: "sor", sor: Expression[], id: symbol};
 export interface Named {kind: "named", named: string, id: symbol};
+export interface At {kind: "at", at: Expression, id: symbol};
+export interface NotAt {kind: "not_at", not_at: Expression, id: symbol};
 
-export type Expression = One | Str | Range | Star | Plus | Seq | Sor | Named;
+export type Expression = One | NotOne | Str | Range | Star | Plus | Seq | Sor | Named | At | NotAt;
 
 export interface Rules {
     [index: string]: Expression
@@ -68,6 +71,10 @@ function makeUniquesymbol() : symbol {
 
 export function one(chrs : string) : Expression {
     return {kind: "one", one: chrs, id: makeUniquesymbol()};
+}
+
+export function not_one(chrs : string) : Expression {
+    return {kind: "not_one", not_one: chrs, id: makeUniquesymbol()};
 }
 
 export function str(s : string) : Expression {
@@ -133,6 +140,14 @@ export function named(name: string) : Expression {
     return {kind: "named", named: name, id: makeUniquesymbol()};
 }
 
+export function at(arg: ExprnArg) : Expression {
+    return {kind: 'at', at: makeExpression(arg), id: makeUniquesymbol()};
+}
+
+export function not_at(arg: ExprnArg) : Expression {
+    return {kind: 'not_at', not_at: makeExpression(arg), id: makeUniquesymbol()};
+}
+
 export class Grammar<State> {
     rules: Rules;
     exprnActions: ExprnActions<State>;
@@ -142,6 +157,10 @@ export class Grammar<State> {
         this.rules = {};
         this.exprnActions = {};
         this.namedActions = {};
+    }
+
+    with(exprn: Expression, action: Action<State>) {
+        this.exprnActions[exprn.id] = action;
     }
 
     one(chrs : string, action?: Action<State>) : Expression {
@@ -218,19 +237,23 @@ export class Grammar<State> {
 
 export class Parser<State> {
     grammar: Grammar<State>;
+    in_predicate: number;
+
     constructor(grammar: Grammar<State>) {
         this.grammar = grammar;
+        this.in_predicate = 0;
     }
 
     accept(arg : ExprnArg, input : string, state: State) : boolean {
         let inp = new Input(input);
+        this.in_predicate = 0;
         return this.parse(makeExpression(arg), inp, state);
     }
 
     parse(exprn : Expression, input : Input, state: State) : boolean {
         let begin = input.position;
         let res = this.parseExprn(exprn, input, state);
-        if (res && exprn.id in this.grammar.exprnActions) {
+        if (res && exprn.id in this.grammar.exprnActions && this.in_predicate == 0) {
             input.span[0] = begin;
             input.span[1] = input.position;
             this.grammar.exprnActions[exprn.id](input, state);
@@ -246,6 +269,17 @@ export class Parser<State> {
                 }
                 let ch = input.source[input.position];
                 if (exprn.one.indexOf(ch) < 0) {
+                    return false;
+                }
+                input.position += 1;
+                return true;
+            }
+            case 'not_one': {
+                if (input.position == input.length) {
+                    return false;
+                }
+                let ch = input.source[input.position];
+                if (exprn.not_one.indexOf(ch) >= 0) {
                     return false;
                 }
                 input.position += 1;
@@ -312,12 +346,28 @@ export class Parser<State> {
                 }
                 let begin = input.position;
                 let res = this.parse(this.grammar.rules[exprn.named], input, state);
-                if (res && exprn.named in this.grammar.namedActions) {
+                if (res && exprn.named in this.grammar.namedActions && this.in_predicate == 0) {
                     input.span[0] = begin;
                     input.span[1] = input.position;
                     this.grammar.namedActions[exprn.named](input, state);
                 }
                 return res;
+            }
+            case 'at': {
+                let here = input.position;
+                this.in_predicate += 1;
+                let res = this.parse(exprn.at, input, state);
+                this.in_predicate -= 1;
+                input.position = here;
+                return res;
+            }
+            case 'not_at': {
+                let here = input.position;
+                this.in_predicate += 1;
+                let res = this.parse(exprn.not_at, input, state);
+                this.in_predicate -= 1;
+                input.position = here;
+                return !res;
             }
         }
     }
