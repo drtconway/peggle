@@ -45,23 +45,18 @@ export interface Star {kind: "star", star: Expression, id: symbol};
 export interface Plus {kind: "plus", plus: Expression, id: symbol};
 export interface Seq {kind: "seq", seq: Expression[], id: symbol};
 export interface Sor {kind: "sor", sor: Expression[], id: symbol};
-export interface Named {kind: "named", named: string, id: symbol};
 export interface At {kind: "at", at: Expression, id: symbol};
 export interface NotAt {kind: "not_at", not_at: Expression, id: symbol};
 
-export type Expression = Fwd | One | NotOne | Str | Range | Star | Plus | Seq | Sor | Named | At | NotAt;
+export type Expression = Fwd | One | NotOne | Str | Range | Star | Plus | Seq | Sor | At | NotAt;
 
 export interface Rules {
     [index: string]: Expression
 };
 
-export type ExprnArg = Expression | string;
+export type ExprnArg = Expression;
 function makeExpression(arg : ExprnArg) : Expression {
-    if (typeof arg == 'string') {
-        return named(arg);
-    } else {
-        return arg;
-    }
+    return arg;
 }
 
 let nextId = 1;
@@ -139,10 +134,6 @@ export function sor(args: ExprnArg[]) : Expression {
         return exprns[0];
     }
     return {kind: "sor", sor: exprns, id: makeUniquesymbol()};
-}
-
-export function named(name: string) : Expression {
-    return {kind: "named", named: name, id: makeUniquesymbol()};
 }
 
 export function at(arg: ExprnArg) : Expression {
@@ -283,19 +274,6 @@ export class Parser<State> {
                     n += 1;
                 }
                 return true;
-            }
-            case 'named': {
-                if (!(exprn.named in this.grammar.rules)) {
-                    throw new Error(`no such rule '${exprn.named}'`);
-                }
-                let begin = input.position;
-                let res = this.parse(this.grammar.rules[exprn.named], input, state);
-                if (res && exprn.named in this.grammar.namedActions && this.in_predicate == 0) {
-                    input.span[0] = begin;
-                    input.span[1] = input.position;
-                    this.grammar.namedActions[exprn.named](input, state);
-                }
-                return res;
             }
             case 'at': {
                 let here = input.position;

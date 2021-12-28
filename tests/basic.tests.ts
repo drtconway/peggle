@@ -2,6 +2,7 @@ import * as P from "../src/index";
 
 import * as mocha from "mocha";
 import * as chai from "chai";
+import { G } from "../examples/sql";
 const expect = chai.expect;
 
 describe("test fwd", () => {
@@ -197,22 +198,6 @@ describe("test opt", () => {
   });
 });
 
-describe("test named", () => {
-  let g = new P.Grammar<null>();
-  g.rules["foo"] = P.one("a");
-  let p = new P.Parser(g);
-  it("test named", () => {
-    let v = P.named("foo");
-    expect(p.accept(v, "", null)).to.eql(false);
-    expect(p.accept(v, "a", null)).to.eql(true);
-    expect(p.accept(v, "b", null)).to.eql(false);
-  });
-  it("test mis-named", () => {
-    let v = P.named("bar");
-    expect(() => p.accept(v, "", null)).to.throw("no such rule 'bar'");
-  });
-});
-
 describe("test at and not_at", () => {
   let g = new P.Grammar<null>();
   let p = new P.Parser(g);
@@ -243,7 +228,7 @@ describe("test at and not_at with actions", () => {
   g.rules.identifier = P.plus(letter);
   g.rules.keyword = P.sor(
     keywords.map((kw: string) => {
-      return P.seq([P.str(kw), P.not_at("identifier")]);
+      return P.seq([P.str(kw), P.not_at(g.rules.identifier)]);
     })
   );
   g.with(g.rules.identifier, (input: P.Input, state: string[]) => {
@@ -256,7 +241,7 @@ describe("test at and not_at with actions", () => {
   for (let kw of keywords) {
       it(`test '${kw}`, () => {
           let stk : string[] = [];
-          expect(p.accept(P.named('keyword'), kw, stk)).to.eql(true);
+          expect(p.accept(g.rules.keyword, kw, stk)).to.eql(true);
           expect(stk.length).to.eql(1);
           expect(stk[0]).to.eql(kw);
       });
@@ -267,32 +252,28 @@ type Item = { kind: "num"; value: number };
 
 describe("test simple grammar", () => {
   let g = new P.Grammar<number[]>();
-  g.rules = {
-    num: P.plus(P.one("0123456789")),
-    plusNum: P.seq([P.one("+"), "num"]),
-    plus: P.seq(["num", P.star("plusNum")]),
-  };
-  g.namedActions = {
-    num: (input: P.Input, state: number[]) => {
-      let n = Number(input.string());
-      state.push(n);
-    },
-    plusNum: (input: P.Input, state: number[]) => {
-      let x2 = state.pop() || 0;
-      let x1 = state.pop() || 0;
-      state.push(x1 + x2);
-    },
-  };
+  g.rules.num = P.plus(P.one("0123456789"));
+  g.rules.plusNum = P.seq([P.one("+"), g.rules.num]);
+  g.rules.plus = P.seq([g.rules.num, P.star(g.rules.plusNum)]);
+  g.with(g.rules.num, (input: P.Input, state: number[]) => {
+    let n = Number(input.string());
+    state.push(n);
+  });
+  g.with(g.rules.plusNum, (input: P.Input, state: number[]) => {
+    let x2 = state.pop() || 0;
+    let x1 = state.pop() || 0;
+    state.push(x1 + x2);
+  });
   let p = new P.Parser(g);
   it("just a number", () => {
     let stk: number[] = [];
-    expect(p.accept("plus", "123", stk)).to.eql(true);
+    expect(p.accept(g.rules.plus, "123", stk)).to.eql(true);
     expect(stk.length).to.eql(1);
     expect(stk[0]).to.eql(123);
   });
   it("just two numbers", () => {
     let stk: number[] = [];
-    expect(p.accept("plus", "123+456", stk)).to.eql(true);
+    expect(p.accept(g.rules.plus, "123+456", stk)).to.eql(true);
     expect(stk.length).to.eql(1);
     expect(stk[0]).to.eql(579);
   });
@@ -300,51 +281,50 @@ describe("test simple grammar", () => {
 
 describe("recursive grammar", () => {
   let g = new P.Grammar<number[]>();
-  g.rules = {
-    num: P.plus(P.one("0123456789")),
-    factor: P.sor(["num", P.seq([P.one("("), "exprn", P.one(")")])]),
-    timesFactor: P.seq([P.one("*"), "factor"]),
-    term: P.seq(["factor", P.star("timesFactor")]),
-    plusTerm: P.seq([P.one("+"), "term"]),
-    exprn: P.seq(["term", P.star("plusTerm")]),
-  };
-  g.namedActions = {
-    num: (input: P.Input, state: number[]) => {
-      state.push(Number(input.string()));
-    },
-    timesFactor: (input: P.Input, state: number[]) => {
-      let x2 = state.pop() || 0;
-      let x1 = state.pop() || 0;
-      state.push(x1 * x2);
-    },
-    plusTerm: (input: P.Input, state: number[]) => {
-      let x2 = state.pop() || 0;
-      let x1 = state.pop() || 0;
-      state.push(x1 + x2);
-    },
-  };
+  g.rules.exprn = P.fwd();
+  g.rules.num = P.plus(P.one("0123456789"));
+  g.rules.factor = P.sor([g.rules.num, P.seq([P.one("("), g.rules.exprn, P.one(")")])]);
+  g.rules.timesFactor = P.seq([P.one("*"), g.rules.factor]);
+  g.rules.term = P.seq([g.rules.factor, P.star(g.rules.timesFactor)]);
+  g.rules.plusTerm = P.seq([P.one("+"), g.rules.term]);
+  g.update(g.rules.exprn, P.seq([g.rules.term, P.star(g.rules.plusTerm)]));
+
+  g.with(g.rules.num, (input: P.Input, state: number[]) => {
+    state.push(Number(input.string()));
+  });
+  g.with(g.rules.timesFactor, (input: P.Input, state: number[]) => {
+    let x2 = state.pop() || 0;
+    let x1 = state.pop() || 0;
+    state.push(x1 * x2);
+  });
+  g.with(g.rules.plusTerm, (input: P.Input, state: number[]) => {
+    let x2 = state.pop() || 0;
+    let x1 = state.pop() || 0;
+    state.push(x1 + x2);
+  });
+
   let p = new P.Parser(g);
   it("just a number", () => {
     let stk: number[] = [];
-    expect(p.accept("exprn", "123", stk)).to.eql(true);
+    expect(p.accept(g.rules.exprn, "123", stk)).to.eql(true);
     expect(stk.length).to.eql(1);
     expect(stk[0]).to.eql(123);
   });
   it("just two numbers + ", () => {
     let stk: number[] = [];
-    expect(p.accept("exprn", "123+456", stk)).to.eql(true);
+    expect(p.accept(g.rules.exprn, "123+456", stk)).to.eql(true);
     expect(stk.length).to.eql(1);
     expect(stk[0]).to.eql(579);
   });
   it("just two numbers *", () => {
     let stk: number[] = [];
-    expect(p.accept("exprn", "123*456", stk)).to.eql(true);
+    expect(p.accept(g.rules.exprn, "123*456", stk)).to.eql(true);
     expect(stk.length).to.eql(1);
     expect(stk[0]).to.eql(56088);
   });
   it("a more complex expression", () => {
     let stk: number[] = [];
-    expect(p.accept("exprn", "(1+2)*(3+4)+5*6", stk)).to.eql(true);
+    expect(p.accept(g.rules.exprn, "(1+2)*(3+4)+5*6", stk)).to.eql(true);
     expect(stk.length).to.eql(1);
     expect(stk[0]).to.eql(51);
   });
@@ -540,7 +520,7 @@ describe("test expression actions", () => {
   describe("named", () => {
     let g = new P.Grammar<Set<string>>();
     g.rules.qux = P.one("a");
-    let e = g.with(P.named("qux"), (input: P.Input, state: Set<string>) => {
+    let e = g.with(g.rules.qux, (input: P.Input, state: Set<string>) => {
       state.add(input.string());
     });
     let p = new P.Parser(g);
@@ -557,7 +537,7 @@ describe("test expression actions", () => {
     });
     it("without this named (1)", () => {
       let s = new Set<string>();
-      expect(p.accept(P.named("qux"), "a", s)).to.eql(true);
+      expect(p.accept(P.one("a"), "a", s)).to.eql(true);
       expect(s.size).to.eql(0);
     });
   });
