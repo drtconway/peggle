@@ -37,6 +37,7 @@ export interface ExprnActions<State> {
 }
 
 export interface Fwd {kind: "fwd", id: symbol};
+export interface Any {kind: "any", id: symbol};
 export interface One {kind: "one", one: string, id: symbol};
 export interface NotOne {kind: "not_one", not_one: string, id: symbol};
 export interface Str {kind: "str", str: string, id: symbol};
@@ -48,7 +49,7 @@ export interface Sor {kind: "sor", sor: Expression[], id: symbol};
 export interface At {kind: "at", at: Expression, id: symbol};
 export interface NotAt {kind: "not_at", not_at: Expression, id: symbol};
 
-export type Expression = Fwd | One | NotOne | Str | Range | Star | Plus | Seq | Sor | At | NotAt;
+export type Expression = Fwd | Any | One | NotOne | Str | Range | Star | Plus | Seq | Sor | At | NotAt;
 
 export interface Rules {
     [index: string]: Expression
@@ -67,6 +68,20 @@ function makeUniquesymbol() : symbol {
 
 export function fwd() : Expression {
     return {kind: "fwd", id: makeUniquesymbol()};
+}
+
+export function implement(forward: Expression, implementation: Expression) : Expression {
+    if (forward.kind != "fwd") {
+        throw new Error(`cannot implement over the top of non-forward.`);
+    }
+    let id0 = forward.id;
+    Object.assign(forward, implementation);
+    forward.id = id0;
+    return forward;
+}
+
+export function any() : Expression {
+    return {kind: "any", id: makeUniquesymbol()};
 }
 
 export function one(chrs : string) : Expression {
@@ -197,6 +212,13 @@ export class Parser<State> {
         switch (exprn.kind) {
             case 'fwd': {
                 throw new Error(`unresolved forward declaration.`);
+            }
+            case 'any': {
+                if (input.position == input.length) {
+                    return false;
+                }
+                input.position += 1;
+                return true;
             }
             case 'one': {
                 if (input.position == input.length) {

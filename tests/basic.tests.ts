@@ -2,7 +2,6 @@ import * as P from "../src/index";
 
 import * as mocha from "mocha";
 import * as chai from "chai";
-import { G } from "../examples/sql";
 const expect = chai.expect;
 
 describe("test fwd", () => {
