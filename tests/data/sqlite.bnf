@@ -1,0 +1,154 @@
+<ampersand> ::= &
+
+<bar> ::= |
+
+<comma> ::= ,
+
+<concat> ::= ||
+
+<double equals> ::= ==
+
+<double greater than> ::= >>
+
+<double less than> ::= <<
+
+<equals> ::= =
+
+<greater than> ::= >
+
+<greater than or equal> ::= >=
+
+<left paren> ::= (
+
+<less than> ::= <
+
+<less than greater than> ::= <>
+
+<less than or equal> ::= <=
+
+<minus> ::= -
+
+<not equals> ::= !=
+
+<percent> ::= %
+
+<plus> ::= +
+
+<question mark> ::= ?
+
+<right paren> ::= )
+
+<slash> ::= /
+
+<star> ::= *
+
+<tilde> ::= ~
+
+<digit> ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+
+<digits> ::= <digit>...
+
+<select stmt> ::= [ <with clause> ] <select core> [ <order by clause> ] [ <limit clause> ]
+
+<with clause> ::= WITH [ RECURSIVE ] <common table expression list>
+
+<common table expression list> ::= <common table expression> [ { <comma> <common table expression> }... ]
+
+<select core> ::= { <select core query> | <select core values> } [ <compound operator> <select core> ]
+
+<select core query> ::= SELECT [ <select quantifier> ] <result column list>
+    [ <from clause> ] [ <where clause> ] [ <group by clause> ] [ <window clause> ]
+
+<select quantifier> ::= DISTINCT | ALL
+
+<result column list> ::= <result column> [ { <comma> <result column> }... ]
+
+<from clause> ::= FROM { <table or subquery list> | <join clause> }
+
+<table or subquery list> ::= <table or subquery> [ { <comma> <table or subquery> }... ]
+
+<where clause> ::= WHERE <expr>
+
+<group by clause> ::= GROUP BY <expr list> [ HAVING <expr> ]
+
+<window clause> ::= WINDOW <window name> AS <window defn> [ { <comma> <window name> AS <window defn> }... ]
+
+<common table expression> ::= <table name> [ <left paren> <column name list> <right paren> ]
+    AS [ [ NOT ] MATERIALIZED ] <left paren> <select stmt> <right paren>
+
+<column name list> ::= <column name> [ { <comma> <column name> }... ]
+
+<compound operator> ::= UNION ALL | UNION | INTERSECT | EXCEPT
+
+<expr primary> ::=
+      <literal value>
+    | <qualified name>
+    | <function expr>
+    | { <left paren> <expr> [ { <comma> <expr> }... ] <right paren> }
+    | <cast expr>
+    | <not exists expr>
+    | <case expr>
+
+<expr prefix> ::= <unary operator> <expr primary>
+
+<unary operator> ::= <tilde> | <plus> | <minus>
+
+<expr collate> ::= <expr prefix> [ COLLATE <collation name> ]
+
+<expr concat> ::= <expr collate> [ { <concat> <expr collate> }... ]
+
+<expr multiplicative> ::= <expr concat> [ { <multiplicative operator> <expr concat> }... ]
+
+<multiplicative operator> ::= <star> <slash> <percent>
+
+<expr additive> ::= <expr multiplicative> [ { <additive operator> <expr multiplicative> }... ]
+
+<additive operator> ::= <plus> | <minus>
+
+<expr bitwise> ::= <expr additive> [ { <bitwise operator> <expr additive> }... ]
+
+<bitwise operator> ::= <ampersand> | <bar> | <double less than> | <double greater than>
+
+<expr comparison> ::= <expr bitwise> [ { <comparison operator> <expr bitwise> }... ]
+
+<comparison operator> ::= <less than or equal> | <greater than or equal> | <less than> | <greater than>
+
+<expr boolean> ::= <expr comparison> [ <expr boolean tail> ]
+
+<expr boolean tail>
+    ::= { <boolean operator> <expr comparison> }
+      | { [ NOT ] LIKE <expr comparison> [ ESCAPE <expr comparison> ] }
+      | { [ NOT ] <match operator> <expr comparison> }
+      | <null operator>
+
+<match operator> ::= GLOB | REGEXP | MATCH
+
+<null operator> ::= ISNULL | NOTNULL | NOT NULL
+
+<boolean operator> ::= <double equals> | <equals> | <not equals> | <less than greater than> | IS NOT | IS 
+
+<expr negated> ::= [ NOT ] <expr boolean>
+
+<expr logical> ::= <expr negated> [ { <logical operator> <expr negated> }... ]
+
+<logical operator> ::= AND | OR
+
+<expr> ::= <expr logical>
+
+<expr list> ::= <expr> [ { <comma> <expr> }... ]
+
+<function expr> ::= <function name> <left paren> [ <star> | { DISTINCT [ <expr list> ] } ] <right paren> [ <filter clause> ] [ <over clause> ]
+
+<cast expr> ::= CAST <left paren> <expr> AS <type name> <right paren>
+
+<not exists expr> ::= NOT EXISTS <left paren> <select stmt> <right paren>
+
+<case expr> ::= CASE <expr> <case when clause>... [ ELSE <expr> ] END
+
+<case when clause> ::= WHEN <expr> THEN <expr>
+
+<join clause> ::= <table or subquery> [ { <join operator> <table or subquery> <join constraint> }... ]
+
+<join constraint>
+    ::= { ON <expr> }
+      | { USING <left paren> <column name list> <right paren> }
