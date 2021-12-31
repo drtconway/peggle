@@ -24,9 +24,17 @@ const name_body = plus(name_char);
 const name = seq([one('<'), name_body, one('>')]);
 
 const assigns = str('::=');
+const strictly_assigns = str(":==");
 
-const graphic_literal = plus(seq([not_at(ws_char), any()]));
-const literal = plus(seq([not_at(one(' ')), name_char]));
+const unquoted_literal_char = sor([range('a', 'z'), range('A', 'Z'), range('0', '9'), one('-_:=/.')]);
+const unquoted_literal = plus(unquoted_literal_char);
+
+const escape_character = one('\\"rntvf');
+const character_escape = seq([one('\\'), escape_character]);
+const quoted_literal_char = sor([not_one('"\\'), character_escape]);
+const quoted_literal_body = plus(quoted_literal_char);
+const quoted_literal = seq([one('"'), quoted_literal_body, one('"')]);
+const literal = sor([unquoted_literal, quoted_literal]);
 
 const expression = fwd();
 const optional_expression = sseq(one('['), expression, one(']'));
@@ -45,8 +53,9 @@ implement(expression, sseq(seq_expression, star(alternative_expression)));
 
 const end = sor([seq([eol, eol]), eof]);
 
-export const rule = sseq(name, assigns, sor([expression, graphic_literal]), end);
-
+export const ruleLoose = sseq(assigns, expression, end);
+export const ruleStrict = sseq(strictly_assigns, expression, end);
+export const rule = sseq(name, sor([ruleLoose, ruleStrict]));
 
 export interface NameNode {kind: "name", value: string};
 export interface LiteralNode {kind: "literal", value: string};
@@ -54,10 +63,12 @@ export interface OptNode {kind: "opt", value: ExpressionNode};
 export interface PlusNode {kind: "plus", value: ExpressionNode};
 export interface ConjNode {kind: "conj", value: ExpressionNode[]};
 export interface DisjNode {kind: "disj", value: ExpressionNode[]};
-export interface DefinitionNode {kind: "definition", name: string, body: ExpressionNode};
+export interface DefinitionNode {kind: "definition", name: string, body: ExpressionNode, mode: "strict" | "loose"};
 
 export type ExpressionNode = NameNode | LiteralNode | OptNode | PlusNode | ConjNode | DisjNode ;
 export type Node = ExpressionNode | DefinitionNode ;
+
+export interface Definition {body: ExpressionNode, mode: "strict" | "loose"};
 
 /* istanbul ignore next */
 function error(msg: string) : Node {
@@ -79,10 +90,10 @@ grammar.rules.declaration = rule;
 grammar.with(name_body, (input: Input, state: Node[]) => {
     state.push({kind: "name", value: input.string()});
 });
-grammar.with(literal, (input: Input, state: Node[]) => {
+grammar.with(unquoted_literal, (input: Input, state: Node[]) => {
     state.push({kind: "literal", value: input.string()});
 });
-grammar.with(graphic_literal, (input: Input, state: Node[]) => {
+grammar.with(quoted_literal_body, (input: Input, state: Node[]) => {
     state.push({kind: "literal", value: input.string()});
 });
 grammar.with(optional_expression, (input: Input, state: Node[]) => {
@@ -111,29 +122,53 @@ grammar.with(alternative_expression, (input: Input, state: Node[]) => {
     disj.value.push(exprn);
     state.push(disj);
 });
-grammar.with(rule, (input: Input, state: Node[]) => {
+grammar.with(ruleStrict, (input: Input, state: Node[]) => {
     let exprn : ExpressionNode = popExpressionNode(state);
     let nameNode : ExpressionNode = popExpressionNode(state);
     /* istanbul ignore next */
     if (nameNode.kind != "name") {
         throw new Error('internal error at rule (3)');
     }
-    state.push({kind: "definition", name: nameNode.value, body: exprn});
+    state.push({kind: "definition", name: nameNode.value, body: exprn, mode: "strict"});
+});
+grammar.with(ruleLoose, (input: Input, state: Node[]) => {
+    let exprn : ExpressionNode = popExpressionNode(state);
+    let nameNode : ExpressionNode = popExpressionNode(state);
+    /* istanbul ignore next */
+    if (nameNode.kind != "name") {
+        throw new Error('internal error at rule (3)');
+    }
+    state.push({kind: "definition", name: nameNode.value, body: exprn, mode: "loose"});
 });
 
 export class Syntax {
-    definitions: {[name: string]: ExpressionNode};
+    definitions: {[name: string]: Definition};
+    whitespace?: string;
     names: string[];
     dependencies: {[name: string]: string[]};
     sccs : string[][];
 
-    constructor(definitions: {[name: string]: ExpressionNode}) {
+    constructor(definitions: {[name: string]: Definition}, whitespace?: string) {
         this.definitions = definitions;
+        if (whitespace) {
+            if (!(whitespace in this.definitions)) {
+                throw new Error(`Syntax: whitespace rule not defined.`);
+            }
+            if (this.definitions[whitespace].mode != "strict") {
+                throw new Error(`Syntax: whitespace rule must be strict.`)
+            }
+            this.whitespace = whitespace;
+        }
         this.names = [];
         this.dependencies = {};
         for (let name in this.definitions) {
+            this.names.push(name);
             this.dependencies[name] = [];
-            this.addDependencies(name, this.definitions[name]);
+            let defn = this.definitions[name];
+            if (this.whitespace && defn.mode == "loose") {
+                this.dependencies[name].push(this.whitespace);
+            }
+            this.addDependencies(name, defn.body);
         }
         this.names.sort();
         for (let name in this.dependencies) {
@@ -182,6 +217,8 @@ export class Syntax {
                 s.add(kid);
             }
         }
+        //console.log([...r].sort());
+        //console.log([...s].sort());
         r.forEach((name) => { s.delete(name); });
         return [...s].sort();
     }
@@ -193,32 +230,51 @@ export class Syntax {
                 rules[name] = fwd();
             }
             for (let name of scc) {
-                let exprn = this.makeExpression(this.definitions[name], rules);
+                if (!(name in this.definitions)) {
+                    if (!(name in rules)) {
+                        throw new Error(`Syntax.makeRules: undefined/un-predefined name "${name}"`)
+                    }
+                    continue;
+                }
+                let defn = this.definitions[name];
+                let exprn = this.makeExpression(defn.body, defn.mode, rules);
                 implement(rules[name], exprn);
             }
         }
         return rules;
     }
 
-    makeExpression(exprn: ExpressionNode, rules: {[name: string]: Expression}) : Expression {
+    makeExpression(exprn: ExpressionNode, mode: "strict" | "loose", rules: {[name: string]: Expression}) : Expression {
         switch (exprn.kind) {
             case 'literal': {
                 return str(exprn.value);
             }
             case 'name': {
+                if (!(exprn.value in rules)) {
+                    throw new Error(`Syntax.makeExpression: undefined name "${exprn.value}"`);
+                }
                 return rules[exprn.value];
             }
             case 'opt': {
-                return opt(this.makeExpression(exprn.value, rules));
+                return opt(this.makeExpression(exprn.value, mode, rules));
             }
             case 'plus': {
-                return plus(this.makeExpression(exprn.value, rules));
+                return plus(this.makeExpression(exprn.value, mode, rules));
             }
             case 'conj': {
-                return seq(exprn.value.map((kid) => this.makeExpression(kid, rules)));
+                if (mode == "strict" || !this.whitespace) {
+                    return seq(exprn.value.map((kid) => this.makeExpression(kid, mode, rules)));
+                }
+                let whitespace = rules[this.whitespace];
+                let conj : Expression[] = [];
+                for (let kid of exprn.value) {
+                    conj.push(whitespace);
+                    conj.push(this.makeExpression(kid, mode, rules));
+                }
+                return seq(exprn.value.map((kid) => this.makeExpression(kid, mode, rules)));
             }
             case 'disj': {
-                return sor(exprn.value.map((kid) => this.makeExpression(kid, rules)));
+                return sor(exprn.value.map((kid) => this.makeExpression(kid, mode, rules)));
             }
         }
     }

@@ -1,52 +1,120 @@
-<ampersand> ::= &
+<whitespace character> :== " " | "\t" | "\r" | "\n" | "\f" | "\v"
 
-<bar> ::= |
+<whitespace> :== [ <whitespace character>... ]
 
-<comma> ::= ,
+<ampersand> ::= "&"
 
-<concat> ::= ||
+<backslash> :== "\\"
 
-<double equals> ::= ==
+<bar> ::= "|"
 
-<double greater than> ::= >>
+<comma> ::= ","
 
-<double less than> ::= <<
+<concat> ::= "||"
 
-<equals> ::= =
+<dot> :== "."
 
-<greater than> ::= >
+<double equals> ::= "=="
 
-<greater than or equal> ::= >=
+<double greater than> ::= ">>"
 
-<left paren> ::= (
+<double less than> ::= "<<"
 
-<less than> ::= <
+<equals> ::= "="
 
-<less than greater than> ::= <>
+<greater than> ::= ">"
 
-<less than or equal> ::= <=
+<greater than or equal> ::= ">="
 
-<minus> ::= -
+<left paren> ::= "("
 
-<not equals> ::= !=
+<less than> ::= "<"
 
-<percent> ::= %
+<less than greater than> ::= "<>"
 
-<plus> ::= +
+<less than or equal> ::= "<="
 
-<question mark> ::= ?
+<minus> ::= "-"
 
-<right paren> ::= )
+<not equals> ::= "!="
 
-<slash> ::= /
+<percent> ::= "%"
 
-<star> ::= *
+<plus> ::= "+"
 
-<tilde> ::= ~
+<quote> :== "'"
 
-<digit> ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+<right paren> ::= ")"
 
-<digits> ::= <digit>...
+<slash> ::= "/"
+
+<star> :== "*"
+
+<tilde> :== "~"
+
+<lower> :== a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | w | x | y | z
+
+<upper> :== A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z
+
+<alpha> :== <lower> | <upper>
+
+<digit> :== 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+
+<digits> :== <digit>...
+
+<hexit>
+    :== 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+      | a | b | c | d | e | f
+      | A | B | C | D | E | F
+
+<hexits> :== <hexit>...
+
+<numeric literal>
+    :== { { 0x | 0X } <hexits> }
+      | { <digits> [ <dot> [ <digits> ] [ { e | E } [ <plus> | <minus> ] <digits> ] ] }
+      | { <dot> [ <digits> ] [ { e | E } [ <plus> | <minus> ] <digits> ] }
+
+<string literal character>
+    :== <any character except backslash or quote>
+      | <quote> <quote>
+      | <character escape>
+
+<character escape>
+    :== <backslash> { t | r | n | f | v | <backslash> | <quote> }
+
+<string literal body> :== [ <string literal character>... ]
+
+<string literal part> :== <quote> <string literal body> <quote>
+
+<string literal> :== <string literal part>...
+
+<literal value> :== <numeric literal> | <string literal>
+
+<identifier start character> :== <alpha>
+
+<identifier part character> :== <alpha> | <digit> | "_"
+
+<identifier> :== <identifier start character> [ <identifier part character>... ]
+
+<qualified name> ::= <identifier> [ <dot> <identifier> [ <dot> <identifier> ] ]
+
+<collation name> :== <identifier>
+
+<column name> ::= <identifier>
+
+<column alias> ::= <identifier>
+
+<function name> ::= <identifier>
+
+<table name> ::= <identifier>
+
+<table alias> ::= <identifier>
+
+<type name> :== <identifier>
+
+<window name> :== <identifier>
+
+<base window name> :== <identifier>
 
 <select stmt> ::= [ <with clause> ] <select core> [ <order by clause> ] [ <limit clause> ]
 
@@ -57,11 +125,16 @@
 <select core> ::= { <select core query> | <select core values> } [ <compound operator> <select core> ]
 
 <select core query> ::= SELECT [ <select quantifier> ] <result column list>
-    [ <from clause> ] [ <where clause> ] [ <group by clause> ] [ <window clause> ]
+    [ <from clause> ] [ <where clause> ] [ <group by clause> ]
 
 <select quantifier> ::= DISTINCT | ALL
 
 <result column list> ::= <result column> [ { <comma> <result column> }... ]
+
+<result column>
+    ::= <star>
+      | { <table name> <dot> <star> }
+      | { <expr> [ [ AS ] <column alias> ] }
 
 <from clause> ::= FROM { <table or subquery list> | <join clause> }
 
@@ -71,7 +144,28 @@
 
 <group by clause> ::= GROUP BY <expr list> [ HAVING <expr> ]
 
-<window clause> ::= WINDOW <window name> AS <window defn> [ { <comma> <window name> AS <window defn> }... ]
+<select core values> ::= VALUES <values list>
+
+<values list> ::= <values> [ { <comma> <values> }... ]
+
+<values> ::= <left paren> <expr list> <right paren>
+
+<order by clause> ::= ORDER BY <ordering term list>
+
+<ordering term list> ::= <ordering term> [ { <comma> <ordering term> }... ]
+
+<ordering term> ::= <expr> [ COLLATE <collation name> ] [ ASC | DESC ] [ NULLS FIRST | NULLS LAST ]
+
+<limit clause> ::= LIMIT <expr> [ OFFSET <expr> | <comma> <expr> ]
+
+<over clause> ::= OVER { <window name> | <window expression> }
+
+<window expression> ::= <left paren> [ <base window name> ] [ PARTITION BY <expr list> ] <right paren>
+
+<table or subquery>
+    ::= { <left paren> { <join clause> | <table or subquery list> } <right paren> }
+      | { <left paren>  <select stmt> <right paren> [ AS <table alias> ] }
+      | { <qualified name> [ AS <table alias> ] }
 
 <common table expression> ::= <table name> [ <left paren> <column name list> <right paren> ]
     AS [ [ NOT ] MATERIALIZED ] <left paren> <select stmt> <right paren>
@@ -139,6 +233,8 @@
 
 <function expr> ::= <function name> <left paren> [ <star> | { DISTINCT [ <expr list> ] } ] <right paren> [ <filter clause> ] [ <over clause> ]
 
+<filter clause> ::= FILTER <left paren> WHERE <expr> <right paren>
+
 <cast expr> ::= CAST <left paren> <expr> AS <type name> <right paren>
 
 <not exists expr> ::= NOT EXISTS <left paren> <select stmt> <right paren>
@@ -148,6 +244,10 @@
 <case when clause> ::= WHEN <expr> THEN <expr>
 
 <join clause> ::= <table or subquery> [ { <join operator> <table or subquery> <join constraint> }... ]
+
+<join operator>
+    ::= <comma>
+      | [ NATURAL ] [ { LEFT [ OUTER] | INNER | CROSS } ] JOIN
 
 <join constraint>
     ::= { ON <expr> }
